@@ -5,6 +5,7 @@ Tells the user in which countries a movie/series is available
 on their streaming services (Netflix, HBO Max, Amazon Prime, Disney+, Apple TV+).
 """
 
+import asyncio
 import logging
 import os
 from dotenv import load_dotenv
@@ -157,7 +158,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(f"🔍 Searching for \"{query}\"...")
 
     try:
-        results = search(query, "US", "en", 5, True)
+        results = await asyncio.to_thread(search, query, "US", "en", 5, True)
     except Exception as e:
         logger.error("Search error: %s", e)
         await update.message.reply_text(f"❌ Error searching: {e}")
@@ -217,7 +218,7 @@ async def process_entry(update: Update, context: ContextTypes.DEFAULT_TYPE, entr
         parse_mode="Markdown",
     )
 
-    availability = check_availability(entry_id)
+    availability = await asyncio.to_thread(check_availability, entry_id)
     response = format_availability(title, year, availability)
 
     await msg.edit_text(response, parse_mode="Markdown")
@@ -225,7 +226,7 @@ async def process_entry(update: Update, context: ContextTypes.DEFAULT_TYPE, entr
 
 async def process_entry_from_callback(query, context: ContextTypes.DEFAULT_TYPE, entry_id: str, title: str, year: int):
     """Process entry from a callback query."""
-    availability = check_availability(entry_id)
+    availability = await asyncio.to_thread(check_availability, entry_id)
     response = format_availability(title, year, availability)
 
     await query.edit_message_text(response, parse_mode="Markdown")
@@ -233,12 +234,19 @@ async def process_entry_from_callback(query, context: ContextTypes.DEFAULT_TYPE,
 
 # ─── Main ────────────────────────────────────────────────────────────────────
 
-def main():
+def build_application() -> Application:
+    """Build the telegram Application with all handlers registered."""
     app = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
 
     app.add_handler(CommandHandler("start", start_command))
     app.add_handler(CallbackQueryHandler(handle_callback))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
+
+    return app
+
+
+def main():
+    app = build_application()
 
     logger.info("Streaming Availability Bot started. Polling...")
     app.run_polling(drop_pending_updates=True)
