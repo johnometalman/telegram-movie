@@ -49,7 +49,7 @@ COUNTRIES = [
     "US", "GB", "CA", "AU", "DE", "FR", "ES", "IT", "MX", "BR",
     "AR", "CO", "CL", "PE", "JP", "KR", "IN", "NL", "SE", "NO",
     "DK", "FI", "BE", "AT", "CH", "PT", "IE", "NZ", "PL", "CZ",
-    "HU", "RO", "GR", "TR", "ZA", "TH", "PH", "SG", "MY", "ID",
+    "HU", "RO", "GR", "TR", "ZA", "TH", "PH", "SG", "MY", "ID","EC"
 ]
 
 COUNTRY_NAMES = {
@@ -63,7 +63,7 @@ COUNTRY_NAMES = {
     "NZ": "New Zealand", "PL": "Poland", "CZ": "Czech Republic",
     "HU": "Hungary", "RO": "Romania", "GR": "Greece", "TR": "Turkey",
     "ZA": "South Africa", "TH": "Thailand", "PH": "Philippines",
-    "SG": "Singapore", "MY": "Malaysia", "ID": "Indonesia",
+    "SG": "Singapore", "MY": "Malaysia", "ID": "Indonesia", "EC": "Ecuador"
 }
 
 # ─── Logging ─────────────────────────────────────────────────────────────────
