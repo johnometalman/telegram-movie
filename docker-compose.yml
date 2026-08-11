@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  bot:
+    build: .
+    container_name: telegram-movie-bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - TZ=UTC
+    # Add these optional improvements:
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    # Uncomment if you want to mount volumes for logs or code changes:
+    # volumes:
+    #   - ./logs:/app/logs
+    #   - ./bot.py:/app/bot.py  # For development (auto-reload)
