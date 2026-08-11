@@ -8,6 +8,7 @@ on their streaming services (Netflix, HBO Max, Amazon Prime, Disney+, Apple TV+)
 import asyncio
 import logging
 import os
+from typing import Optional
 from dotenv import load_dotenv
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
@@ -70,12 +71,14 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     level=logging.INFO,
 )
+# httpx logs full request URLs at INFO level, which include the bot token
+logging.getLogger("httpx").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 
 # ─── Helper functions ────────────────────────────────────────────────────────
 
-def is_user_service(short_name: str) -> str | None:
+def is_user_service(short_name: str) -> Optional[str]:
     """Check if a provider short_name matches one of the user's services. Returns display name or None."""
     for key, variants in SERVICE_VARIANTS.items():
         if short_name in variants:

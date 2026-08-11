@@ -15,7 +15,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from telegram import Update  # noqa: E402
 
-from app import build_application  # noqa: E402
+from bot import build_application  # noqa: E402
 
 
 async def process_update(data: dict) -> None:
@@ -36,10 +36,14 @@ class handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         # Health check so you can verify the deployment in a browser
+        token_set = bool(os.getenv("TELEGRAM_BOT_TOKEN"))
         self.send_response(200)
         self.send_header("Content-Type", "text/plain")
         self.end_headers()
-        self.wfile.write(b"Bot is running. Telegram webhooks should POST here.")
+        self.wfile.write(
+            b"Bot is running. Telegram webhooks should POST here.\n"
+            b"TELEGRAM_BOT_TOKEN configured: %s\n" % (b"yes" if token_set else b"NO - set it in Vercel env vars")
+        )
 
     def log_message(self, format, *args):
         pass
