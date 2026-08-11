@@ -7,4 +7,4 @@ RUN pip install --no-cache-dir -r requierements.txt
 
 COPY . .
 
-CMD ["python", "telegram-movie-bot.py"]
+CMD ["python", "app.py"]
