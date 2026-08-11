@@ -8,6 +8,8 @@ on their streaming services (Netflix, HBO Max, Amazon Prime, Disney+, Apple TV+)
 import asyncio
 import logging
 import os
+import threading
+from http.server import HTTPServer, BaseHTTPRequestHandler
 from typing import Optional
 from dotenv import load_dotenv
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
@@ -235,6 +237,27 @@ async def process_entry_from_callback(query, context: ContextTypes.DEFAULT_TYPE,
     await query.edit_message_text(response, parse_mode="Markdown")
 
 
+# ─── Health Check Server ──────────────────────────────────────────────────────
+
+class HealthHandler(BaseHTTPRequestHandler):
+    """Simple health check handler for Render."""
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"OK")
+
+    def log_message(self, format, *args):
+        # Suppress verbose HTTP logs
+        pass
+
+def run_health_server():
+    """Run a minimal HTTP server for Render health checks."""
+    port = int(os.environ.get("PORT", 10000))
+    server = HTTPServer(('0.0.0.0', port), HealthHandler)
+    logging.info(f"Health check server running on port {port}")
+    server.serve_forever()
+
+
 # ─── Main ────────────────────────────────────────────────────────────────────
 
 def build_application() -> Application:
@@ -249,6 +272,11 @@ def build_application() -> Application:
 
 
 def main():
+    # Start the health check server in a background thread
+    health_thread = threading.Thread(target=run_health_server, daemon=True)
+    health_thread.start()
+    
+    # Build and run the bot
     app = build_application()
 
     logger.info("Streaming Availability Bot started. Polling...")
