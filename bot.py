@@ -46,8 +46,8 @@ SERVICE_VARIANTS = {
     "amp": ["amp", "prv", "amz"],
     "dnp": ["dnp"],
     "atp": ["atp", "itu"],
-    "MP": ["MP"],
-    "CV": ["CV"],
+    "MP": ["mp"],
+    "CV": ["cv"],
 }
 
 # Countries to check (major regions)
@@ -125,7 +125,7 @@ def format_availability(title: str, year: int, availability: dict) -> str:
         return (
             f"🎬 *{title}* ({year})\n\n"
             "❌ Not available on any of your streaming services "
-            "(Netflix, HBO Max, Amazon Prime, Disney+, Apple TV+) "
+            "(Netflix, HBO Max, Amazon Prime, Disney+, Apple TV+, Mercado Play, Claro Video) "
             "in the countries I checked."
         )
 
