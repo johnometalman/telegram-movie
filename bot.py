@@ -35,6 +35,8 @@ USER_SERVICES = {
     "amp": "Amazon Prime Video",
     "dnp": "Disney+",
     "atp": "Apple TV+",
+    "MP":"Mercado Play", 
+    "CV":"Claro Video"
 }
 
 # Also match variants/channels of these services
@@ -44,6 +46,8 @@ SERVICE_VARIANTS = {
     "amp": ["amp", "prv", "amz"],
     "dnp": ["dnp"],
     "atp": ["atp", "itu"],
+    "MP": ["MP"],
+    "CV": ["CV"],
 }
 
 # Countries to check (major regions)
@@ -149,6 +153,8 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "• Amazon Prime Video\n"
         "• Disney+\n"
         "• Apple TV+\n\n"
+        "• Mercado Play\n"
+        "• Claro Video\n\n"
         "Just type a title and I'll search for it!"
     )
 
