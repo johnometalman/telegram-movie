@@ -320,15 +320,6 @@ async def show_seasons(query, context: ContextTypes.DEFAULT_TYPE, entry_id: str,
             await query.edit_message_text(f"📺 *{title}* ({year})\n\nNo season information available.", parse_mode="Markdown")
             return
         
-        # Debug: Log season attributes
-        logger.info(f"Seasons data for {title}: {len(seasons_data)} seasons")
-        for i, season in enumerate(seasons_data):
-            logger.info(f"Season {i} attributes: {dir(season)}")
-            if hasattr(season, 'entry_id'):
-                logger.info(f"Season {i} entry_id: {season.entry_id}")
-            else:
-                logger.info(f"Season {i} has no entry_id attribute")
-        
         msg = f"📺 *{title}* ({year}) - Select a Season\n\n"
         msg += "Choose a season to check its availability:\n"
         
@@ -377,7 +368,14 @@ async def process_season_availability(query, context: ContextTypes.DEFAULT_TYPE,
     
     availability = await asyncio.to_thread(check_availability, season_entry_id)
     logger.info(f"Availability result for {season_title}: {availability}")
-    response = format_availability(season_title, int(season_year) if season_year.isdigit() else 0, availability)
+    
+    # Handle year conversion - it might be string or int
+    try:
+        year_int = int(season_year) if isinstance(season_year, str) else season_year
+    except (ValueError, TypeError):
+        year_int = 0
+    
+    response = format_availability(season_title, year_int, availability)
     
     # Add navigation buttons
     keyboard = [
