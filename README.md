@@ -183,11 +183,43 @@ You can customize the bot by editing `bot.py`:
 
 ## How It Works
 
-1. The bot uses the JustWatch API to search for movies and TV shows
-2. When you search for a title, it finds matching entries
-3. For each entry, it checks streaming availability across configured countries
-4. It filters results to show only your preferred streaming services
-5. Results are formatted and sent back via Telegram
+```mermaid
+flowchart TD
+    A([User sends /start]) --> B[Bot sends welcome message<br/>lists services + prompt to type a title]
+    B --> C[User types a movie or TV show title]
+    C --> D[Bot sends '🔍 Searching for...' message]
+    D --> E[Bot queries API]
+
+    E --> F{Matching results found?}
+
+    F -- No --> G[No results shown<br/>user types another title]
+    G --> C
+
+    F -- Yes --> H[Bot shows list of possible options<br/>as inline buttons]
+
+    H --> I[User selects an option]
+
+    I --> J{API type?}
+
+    J -- Movie --> K[Bot returns services + countries<br/>grouped by service]
+
+    J -- TV Show --> L[Bot shows available seasons<br/>as inline buttons]
+
+    L --> M[User selects a season]
+
+    M --> N[Bot returns services + countries<br/>for that season, grouped by service]
+
+    K --> O{Available anywhere?}
+    N --> O
+
+    O -- Yes --> P[Show '📺 Service / Country list' format]
+    O -- No --> Q[Show '❌ Not available on any of<br/>your streaming services' message]
+
+    P --> R([End of flow<br/>user types a new title to start over])
+    Q --> R
+```
+
+The bot uses the JustWatch API to search for movies and TV shows. When you search for a title, it finds matching entries, checks streaming availability across configured countries, filters results to show only your preferred streaming services, and formats the results for display in Telegram.
 
 ## Troubleshooting
 
