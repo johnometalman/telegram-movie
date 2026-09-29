@@ -9,20 +9,20 @@ import asyncio
 import logging
 import os
 import threading
+from http.server import BaseHTTPRequestHandler, HTTPServer
+
 import httpx
-from http.server import HTTPServer, BaseHTTPRequestHandler
-from typing import Optional
 from dotenv import load_dotenv
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from simplejustwatchapi import JustWatchError, offers_for_countries, search, seasons
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import (
     Application,
-    CommandHandler,
-    MessageHandler,
     CallbackQueryHandler,
+    CommandHandler,
     ContextTypes,
+    MessageHandler,
     filters,
 )
-from simplejustwatchapi import search, offers_for_countries, seasons, JustWatchError
 
 # ─── Configuration ───────────────────────────────────────────────────────────
 
@@ -84,7 +84,7 @@ logger = logging.getLogger(__name__)
 
 # ─── Helper functions ────────────────────────────────────────────────────────
 
-def is_user_service(short_name: str) -> Optional[str]:
+def is_user_service(short_name: str) -> str | None:
     """Check if a provider short_name matches one of the user's services. Returns display name or None."""
     for key, variants in SERVICE_VARIANTS.items():
         if short_name in variants:
@@ -219,6 +219,8 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         entry.entry_id: {"title": entry.title, "year": entry.release_year, "object_type": entry.object_type}
         for entry in results[:5]
     }
+    # Also store the entry_id for the select callback to work
+    context.user_data["last_search_entry_id"] = results[0].entry_id
 
 
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -231,6 +233,13 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         entry_id = data.split(":", 1)[1]
         results = context.user_data.get("search_results", {})
         info = results.get(entry_id, {})
+        
+        # If not in search results, try to get from stored show info
+        if not info:
+            info = context.user_data.get("show_info", {})
+            # Update entry_id in show_info
+            context.user_data["show_info"]["entry_id"] = entry_id
+        
         title = info.get("title", "Unknown")
         year = info.get("year", 0)
         object_type = info.get("object_type", "MOVIE")
@@ -242,7 +251,25 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         entry_id = parts[1]
         title = parts[2]
         year = parts[3]
+        # Store show info for back navigation
+        context.user_data["show_info"] = {"entry_id": entry_id, "title": title, "year": int(year), "object_type": "SHOW"}
         await show_seasons(query, context, entry_id, title, year)
+    elif data.startswith("season_availability:"):
+        season_entry_id = data.split(":", 1)[1]
+        
+        # Get season data from context
+        seasons_data = context.user_data.get("seasons_data", {})
+        season_info = seasons_data.get(season_entry_id, {})
+        season_title = season_info.get("title", "Unknown Season")
+        season_year = season_info.get("year", "Unknown")
+        
+        # Get show info from context
+        show_info = context.user_data.get("show_info", {})
+        show_entry_id = show_info.get("entry_id", season_entry_id)
+        show_title = show_info.get("title", "Unknown")
+        show_year = show_info.get("year", "Unknown")
+        
+        await process_season_availability(query, context, season_entry_id, season_title, season_year, show_entry_id, show_title, show_year)
 
 
 async def process_entry(update: Update, context: ContextTypes.DEFAULT_TYPE, entry_id: str, title: str, year: int, object_type: str | None = None):
@@ -257,6 +284,8 @@ async def process_entry(update: Update, context: ContextTypes.DEFAULT_TYPE, entr
 
     # If it's a TV show, add a button to view seasons
     if object_type == "SHOW":
+        # Store show info for back navigation
+        context.user_data["show_info"] = {"entry_id": entry_id, "title": title, "year": year, "object_type": "SHOW"}
         keyboard = [[InlineKeyboardButton("📺 View Seasons", callback_data=f"seasons:{entry_id}:{title}:{year}")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
         await msg.edit_text(response, parse_mode="Markdown", reply_markup=reply_markup)
@@ -271,6 +300,8 @@ async def process_entry_from_callback(query, context: ContextTypes.DEFAULT_TYPE,
 
     # If it's a TV show, add a button to view seasons
     if object_type == "SHOW":
+        # Store show info for back navigation
+        context.user_data["show_info"] = {"entry_id": entry_id, "title": title, "year": year, "object_type": "SHOW"}
         keyboard = [[InlineKeyboardButton("📺 View Seasons", callback_data=f"seasons:{entry_id}:{title}:{year}")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
         await query.edit_message_text(response, parse_mode="Markdown", reply_markup=reply_markup)
@@ -279,7 +310,7 @@ async def process_entry_from_callback(query, context: ContextTypes.DEFAULT_TYPE,
 
 
 async def show_seasons(query, context: ContextTypes.DEFAULT_TYPE, entry_id: str, title: str, year: int):
-    """Show seasons for a TV show."""
+    """Show seasons for a TV show as clickable buttons."""
     await query.edit_message_text(f"⏳ Fetching seasons for *{title}*...", parse_mode="Markdown")
     
     try:
@@ -289,25 +320,62 @@ async def show_seasons(query, context: ContextTypes.DEFAULT_TYPE, entry_id: str,
             await query.edit_message_text(f"📺 *{title}* ({year})\n\nNo season information available.", parse_mode="Markdown")
             return
         
-        msg = f"📺 *{title}* ({year}) - Seasons\n\n"
+        msg = f"📺 *{title}* ({year}) - Select a Season\n\n"
+        msg += "Choose a season to check its availability:\n"
         
+        # Create keyboard with season buttons
+        keyboard = []
         for season in seasons_data:
             season_num = season.season_number if hasattr(season, 'season_number') else "Unknown"
             season_title = season.title if hasattr(season, 'title') else f"Season {season_num}"
             release_year = season.release_year if hasattr(season, 'release_year') else "Unknown"
             
-            msg += f"📺 *{season_title}*\n"
-            msg += f"   Year: {release_year}\n\n"
+            # Use the season's entry_id for availability checking
+            season_entry_id = season.entry_id if hasattr(season, 'entry_id') else entry_id
+            
+            label = f"📺 {season_title} ({release_year})"
+            # Store season data in context and use entry_id in callback
+            callback_data = f"season_availability:{season_entry_id}"
+            keyboard.append([InlineKeyboardButton(label, callback_data=callback_data)])
         
         # Add back button
-        keyboard = [[InlineKeyboardButton("🔙 Back to Availability", callback_data=f"select:{entry_id}")]]
+        keyboard.append([InlineKeyboardButton("🔙 Back to Show Availability", callback_data=f"select:{entry_id}")])
         reply_markup = InlineKeyboardMarkup(keyboard)
         
         await query.edit_message_text(msg, parse_mode="Markdown", reply_markup=reply_markup)
         
+        # Store seasons data for callback
+        context.user_data["seasons_data"] = {
+            season.entry_id: {
+                "title": season.title if hasattr(season, 'title') else f"Season {season.season_number}",
+                "year": season.release_year if hasattr(season, 'release_year') else "Unknown",
+                "season_number": season.season_number if hasattr(season, 'season_number') else "Unknown"
+            }
+            for season in seasons_data if hasattr(season, 'entry_id')
+        }
+        # Store show info for back navigation
+        context.user_data["show_info"] = {"entry_id": entry_id, "title": title, "year": year}
+        
     except JustWatchError as e:
         logger.error("Error fetching seasons: %s", e)
         await query.edit_message_text(f"❌ Error fetching seasons: {e}", parse_mode="Markdown")
+
+
+async def process_season_availability(query, context: ContextTypes.DEFAULT_TYPE, season_entry_id: str, season_title: str, season_year: str, show_entry_id: str, show_title: str, show_year: str):
+    """Process availability for a specific season."""
+    await query.edit_message_text(f"⏳ Checking availability for *{season_title}* across 40 countries...", parse_mode="Markdown")
+    
+    availability = await asyncio.to_thread(check_availability, season_entry_id)
+    response = format_availability(season_title, int(season_year) if season_year.isdigit() else 0, availability)
+    
+    # Add navigation buttons
+    keyboard = [
+        [InlineKeyboardButton("🔙 Back to Seasons", callback_data=f"seasons:{show_entry_id}:{show_title}:{show_year}")],
+        [InlineKeyboardButton("📺 Back to Show Availability", callback_data=f"select:{show_entry_id}")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await query.edit_message_text(response, parse_mode="Markdown", reply_markup=reply_markup)
 
 
 # ─── Health Check Server ──────────────────────────────────────────────────────
@@ -325,9 +393,9 @@ class HealthHandler(BaseHTTPRequestHandler):
 
 def run_health_server():
     """Run a minimal HTTP server for Render health checks."""
-    port = int(os.environ.get("PORT", 10000))
+    port = int(os.environ.get("PORT", "10000"))
     server = HTTPServer(('0.0.0.0', port), HealthHandler)
-    logging.info(f"Health check server running on port {port}")
+    logger.info(f"Health check server running on port {port}")
     server.serve_forever()
 
 
