@@ -320,6 +320,15 @@ async def show_seasons(query, context: ContextTypes.DEFAULT_TYPE, entry_id: str,
             await query.edit_message_text(f"📺 *{title}* ({year})\n\nNo season information available.", parse_mode="Markdown")
             return
         
+        # Debug: Log season attributes
+        logger.info(f"Seasons data for {title}: {len(seasons_data)} seasons")
+        for i, season in enumerate(seasons_data):
+            logger.info(f"Season {i} attributes: {dir(season)}")
+            if hasattr(season, 'entry_id'):
+                logger.info(f"Season {i} entry_id: {season.entry_id}")
+            else:
+                logger.info(f"Season {i} has no entry_id attribute")
+        
         msg = f"📺 *{title}* ({year}) - Select a Season\n\n"
         msg += "Choose a season to check its availability:\n"
         
@@ -363,9 +372,11 @@ async def show_seasons(query, context: ContextTypes.DEFAULT_TYPE, entry_id: str,
 
 async def process_season_availability(query, context: ContextTypes.DEFAULT_TYPE, season_entry_id: str, season_title: str, season_year: str, show_entry_id: str, show_title: str, show_year: str):
     """Process availability for a specific season."""
+    logger.info(f"Checking availability for season: {season_title} with entry_id: {season_entry_id}")
     await query.edit_message_text(f"⏳ Checking availability for *{season_title}* across 40 countries...", parse_mode="Markdown")
     
     availability = await asyncio.to_thread(check_availability, season_entry_id)
+    logger.info(f"Availability result for {season_title}: {availability}")
     response = format_availability(season_title, int(season_year) if season_year.isdigit() else 0, availability)
     
     # Add navigation buttons
