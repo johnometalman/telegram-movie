@@ -9,6 +9,7 @@ import asyncio
 import logging
 import os
 import threading
+import httpx
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from typing import Optional
 from dotenv import load_dotenv
@@ -21,12 +22,13 @@ from telegram.ext import (
     ContextTypes,
     filters,
 )
-from simplejustwatchapi import search, offers_for_countries
+from simplejustwatchapi import search, offers_for_countries, JustWatchError
 
 # ─── Configuration ───────────────────────────────────────────────────────────
 
 load_dotenv()
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+SERVER_ENDPOINT = os.getenv("SERVER_ENDPOINT")
 
 # User's streaming services with their short names
 USER_SERVICES = {
@@ -102,7 +104,7 @@ def check_availability(entry_id: str) -> dict:
     result = {}
     try:
         country_offers = offers_for_countries(entry_id, COUNTRIES, "en", True)
-    except Exception as e:
+    except JustWatchError as e:
         logger.error("Error fetching offers: %s", e)
         return result
 
@@ -146,6 +148,9 @@ def format_availability(title: str, year: int, availability: dict) -> str:
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /start command."""
+    # Ping the server to wake it up (non-blocking)
+    asyncio.create_task(ping_server())
+    
     await update.message.reply_text(
         "🎬 Welcome to the Streaming Availability Bot!\n\n"
         "Send me the name of a movie or TV show, and I'll tell you "
@@ -156,10 +161,24 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "• Disney+\n"
         "• Apple TV+\n\n"
         "• Mercado Play\n"
-        "• Claro Video\n\n", 
-        "• Paramount+\n\n",
+        "• Claro Video\n"
+        "• Paramount+\n\n"
         "Just type a title and I'll search for it!"
     )
+
+
+async def ping_server():
+    """Ping the server to wake it up."""
+    if not SERVER_ENDPOINT:
+        logger.warning("SERVER_ENDPOINT not set, skipping ping")
+        return
+    
+    try:
+        async with httpx.AsyncClient() as client:
+            await client.get(SERVER_ENDPOINT, timeout=5.0)
+            logger.info("Server ping successful")
+    except (httpx.HTTPError, httpx.TimeoutException) as e:
+        logger.warning("Server ping failed: %s", e)
 
 
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -173,7 +192,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     try:
         results = await asyncio.to_thread(search, query, "US", "en", 5, True)
-    except Exception as e:
+    except JustWatchError as e:
         logger.error("Search error: %s", e)
         await update.message.reply_text(f"❌ Error searching: {e}")
         return
